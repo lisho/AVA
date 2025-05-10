@@ -48,3 +48,40 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: 'Error interno del servidor.' });
     }
 };
+
+exports.getCurrentUser = async (req, res) => {
+    // req.userId y req.userRole son establecidos por el middleware verifyToken
+    if (!req.userId) {
+        return res.status(401).json({ message: "No autenticado." });
+    }
+
+    try {
+        const user = await User.findByPk(req.userId, {
+            attributes: ['id', 'name', 'email', 'createdAt', 'updatedAt'], // No enviar passwordHash
+            include: [{
+                model: Role,
+                attributes: ['name']
+            }]
+        });
+
+        if (!user) {
+            // Esto sería raro si el token es válido y el userId existe,
+            // pero es una buena comprobación.
+            return res.status(404).json({ message: "Usuario no encontrado." });
+        }
+
+        // Formatear el usuario como lo espera el frontend (si es necesario)
+        const userData = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.Role ? user.Role.name : null, // Manejar si el rol no está por alguna razón
+            // puedes añadir más campos si los necesitas en el frontend
+        };
+
+        res.status(200).json({ user: userData });
+    } catch (error) {
+        console.error("Error en getCurrentUser:", error);
+        res.status(500).json({ message: "Error interno del servidor al obtener datos del usuario." });
+    }
+};
