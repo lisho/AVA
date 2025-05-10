@@ -5,16 +5,19 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { Toaster } from "@/components/ui/sonner"; // O el toaster que uses
+import AdminNavbar from '@/components/admin/AdminNavbar'; 
+import AdminSidebar from '@/components/admin/AdminSidebar'; 
 
 // Puedes crear componentes de Navbar y Sidebar aquí o importarlos
 // Ejemplo simple de Navbar
+/*
 const AdminNavbar = () => {
     const { logout, user } = useAuthStore();
     const router = useRouter();
 
     const handleLogout = () => {
         logout();
-        router.push('/admin/login'); // Redirigir explícitamente al logout
+        router.push('/login'); // Redirigir explícitamente al logout
     };
 
     return (
@@ -36,8 +39,8 @@ const AdminSidebar = () => {
     const pathname = usePathname();
 
     const navItems = [
-        { href: '/admin/dashboard', label: 'Dashboard (Inicio)' },
-        { href: '/admin/dashboard/valuation-types', label: 'Tipos de Valoración' },
+        { href: '/dashboard', label: 'Dashboard (Inicio)' },
+        { href: '/dashboard/valuation-types', label: 'Tipos de Valoración' },
         // Futuros enlaces:
         // { href: '/admin/dashboard/users', label: 'Usuarios' },
     ];
@@ -56,7 +59,7 @@ const AdminSidebar = () => {
         </aside>
     );
 }
-
+*/
 // --- PLACEHOLDERS TEMPORALES PARA NAVBAR Y SIDEBAR ---
 /*
 const AdminNavbarPlaceholder = () => {
@@ -159,7 +162,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
                 <AdminSidebar /> 
                  <div className="flex-1 flex flex-col overflow-hidden"> 
-                     <AdminNavbar />   Descomenta cuando los tengas 
+                     <AdminNavbar />  
                      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 dark:bg-gray-800 p-6"> 
                         {children}
                      </main> 

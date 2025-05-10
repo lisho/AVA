@@ -38,7 +38,7 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (isAuthenticated && user?.role === 'admin') {
-            router.push('/admin/dashboard'); // Redirigir si ya está autenticado como admin
+            router.push('/dashboard'); // Redirigir si ya está autenticado como admin
         }
     }, [isAuthenticated, user, router]);
 
