@@ -1,0 +1,9 @@
+const path = require('path');
+require('dotenv').config(); // Carga .env antes de que Sequelize CLI lo necesite
+
+module.exports = {
+  'config': path.resolve('config', 'config.js'), // Usaremos config.js para cargar .env
+  'models-path': path.resolve('src', 'models'),
+  'seeders-path': path.resolve('src', 'seeders'), // Si quieres tus seeders en src
+  'migrations-path': path.resolve('migrations')
+};

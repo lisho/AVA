@@ -28,13 +28,13 @@ app.use('/api/admin', adminRoutes); // Usa las rutas de admin.routes.js
 
 // Sincronización con la BD (para desarrollo, luego usar migraciones)
 // db.sequelize.sync({ force: true }).then(() => { // force: true borra y recrea tablas
-db.sequelize.sync(
+//db.sequelize.sync(
    // { force: true }
-).then(() => {
-    console.log('Base de datos sincronizada.');
-}).catch(err => {
-    console.error('Error al sincronizar la base de datos:', err);
-});
+//.then(() => {
+//    console.log('Base de datos sincronizada.');
+//}).catch(err => {
+//    console.error('Error al sincronizar la base de datos:', err);
+//});
 
 
 const PORT = process.env.PORT || 3001;

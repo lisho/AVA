@@ -35,19 +35,19 @@ export default function LoginPage() {
             password: '',
         },
     });
-
+/*
     useEffect(() => {
         if (isAuthenticated && user?.role === 'admin') {
-            router.push('/dashboard'); // Redirigir si ya está autenticado como admin
+            router.push('admin_dashboard'); // Redirigir si ya está autenticado como admin
         }
     }, [isAuthenticated, user, router]);
-
+*/
        const onSubmit: SubmitHandler<LoginFormValues> = async (data) => {
             setError(null);
             try {
                 await login(data.email, data.password);
                 toast.success("Login exitoso!");
-                router.push('/dashboard');
+                router.push('/admin_dashboard');
             } catch (err) { // err es 'unknown' por defecto o 'any' si tu config es más laxa
                 let errorMessage = 'Error al iniciar sesión. Verifique sus credenciales.';
 
@@ -74,7 +74,7 @@ export default function LoginPage() {
 
     useEffect(() => {
         if (isAuthenticated && user?.role === 'admin') {
-            router.push('/dashboard'); 
+            router.push('/admin_dashboard'); 
         }
     }, [isAuthenticated, user, router]);
 

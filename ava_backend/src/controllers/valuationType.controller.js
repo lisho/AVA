@@ -1,6 +1,8 @@
 // src/controllers/valuationType.controller.js
 const db = require('../models');
 const ValuationType = db.ValuationType;
+const FormSection = db.FormSection; 
+const FormField = db.FormField;   
 // Podríamos añadir Op de Sequelize para búsquedas más complejas si es necesario
 // const Op = db.Sequelize.Op;
 
@@ -114,5 +116,53 @@ exports.delete = async (req, res) => {
     } catch (error) {
         console.error(`Error al eliminar ValuationType con id=${id}:`, error);
         res.status(500).json({ message: "Error interno al eliminar el tipo de valoración." });
+    }
+};
+
+// Obtener todos los ValuationTypes activos// NUEVO: Obtener todos los ValuationTypes activos
+exports.findAllActive = async (req, res) => {
+    try {
+        const valuationTypes = await ValuationType.findAll({
+            where: { isActive: true },
+            attributes: ['id', 'name', 'description'], // Solo campos necesarios para la selección
+            order: [['name', 'ASC']]
+        });
+        res.status(200).json(valuationTypes);
+    } catch (error) {
+        console.error("Error al obtener ValuationTypes activos:", error);
+        res.status(500).json({ message: "Error interno al obtener los tipos de valoración activos." });
+    }
+};
+
+// Obtener la estructura de un ValuationType por id
+exports.findStructureById = async (req, res) => {
+    const id = req.params.valuationTypeId; // El nombre del parámetro en la ruta
+    try {
+        const valuationType = await ValuationType.findOne({
+            where: { id: id, isActive: true }, // Solo si está activo
+            attributes: ['id', 'name', 'description'], // Solo info básica del tipo
+            include: [{
+                model: FormSection,
+                as: 'sections',
+                attributes: ['id', 'title', 'description', 'orderIndex'], // Campos necesarios de la sección
+                include: [{
+                    model: FormField,
+                    as: 'fields',
+                    // Campos necesarios del field para renderizar el formulario y aplicar validaciones
+                    attributes: ['id', 'label', 'fieldType', 'options', 'validationRules', 'orderIndex', 'placeholder', 'helpText', 'defaultValue'],
+                    order: [['orderIndex', 'ASC']]
+                }],
+                order: [['orderIndex', 'ASC']]
+            }]
+        });
+
+        if (valuationType) {
+            res.status(200).json(valuationType);
+        } else {
+            res.status(404).json({ message: `No se encontró un tipo de valoración activo con id=${id} o no tiene estructura.` });
+        }
+    } catch (error) {
+        console.error(`Error al obtener estructura de ValuationType con id=${id}:`, error);
+        res.status(500).json({ message: "Error interno al obtener la estructura del tipo de valoración." });
     }
 };

@@ -54,6 +54,7 @@ db.User.belongsTo(db.Role, { foreignKey: 'roleId' });
 db.ValuationType = require('./valuationType.model.js')(sequelize, DataTypes); 
 db.FormSection = require('./formSection.model.js')(sequelize, DataTypes); 
 db.FormField = require('./formField.model.js')(sequelize, DataTypes); 
+db.Assessment = require('./assessment.model.js')(sequelize, DataTypes); 
 // ... y las demás asociaciones
 // User - Role
 db.Role.hasMany(db.User, { foreignKey: 'roleId' });
@@ -80,6 +81,11 @@ db.FormField.belongsTo(db.FormSection, {
     foreignKey: 'sectionId',
     as: 'section',
 });
+
+// Asociaciones para Assessment 
+if (db.Assessment.associate) { // Buena práctica verificar si el método existe
+    db.Assessment.associate(db);
+}
 
 
 module.exports = db;

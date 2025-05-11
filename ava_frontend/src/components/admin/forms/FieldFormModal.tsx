@@ -13,17 +13,21 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-//import { Checkbox } from '@/components/ui/checkbox'; // Si la necesitas para validationRules UI
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
-import { ValidationRuleValues, FormFieldData as ExistingFieldData } from '@/app/(admin)/valuation-types/[valuationTypeId]/builder/page'; // Importa tipos de la página builder
+import { 
+    ValidationRuleValues,
+    FormFieldData as ExistingFieldData
+} from '@/app/(admin)/valuation-types/[valuationTypeId]/builder/page'; // Ajusta la ruta
+import { toast } from 'sonner';
 
-// Esquema Zod para el formulario de Campo
-// Este esquema necesita ser flexible para options y validationRules
+// Esquema Zod para las opciones de select/radio/checkbox
 const fieldOptionSchema = z.object({
     value: z.string().min(1, "El valor de la opción es requerido."),
     label: z.string().min(1, "La etiqueta de la opción es requerida."),
 });
 
+// Esquema Zod principal para el formulario de Campo
 export const fieldFormSchema = z.object({
     label: z.string().min(1, { message: "La etiqueta del campo es requerida." }),
     fieldType: z.enum(['text', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'email', 'tel'], {
@@ -33,22 +37,27 @@ export const fieldFormSchema = z.object({
     helpText: z.string().optional().or(z.literal('')),
     defaultValue: z.string().optional().or(z.literal('')),
     orderIndex: z.coerce.number().int().min(0, { message: "El orden debe ser un número positivo." }),
-    options: z.array(fieldOptionSchema).optional(), // Array de {value: string, label: string}
-    validationRules: z.custom<ValidationRuleValues>((data) => { // Permite un objeto JSON, pero valida con la interfaz
-        // Aquí podrías añadir validación más específica si es necesario,
-        // o confiar en que el objeto se ajusta a ValidationRuleValues
-        return typeof data === 'object' || data === undefined;
-    }).optional(),
+    options: z.array(fieldOptionSchema).optional(),
+    validationRules: z.object({ // La estructura interna del objeto validationRules
+        required: z.boolean().default(false), // 'required' tiene un default aquí
+        minLength: z.number().optional(),
+        maxLength: z.number().optional(),
+        pattern: z.string().optional(),
+        min: z.number().optional(),
+        max: z.number().optional(),
+        customMessage: z.string().optional(),
+    }).optional(), // <--- TODO el objeto validationRules es opcional
 });
-
 export type FieldFormValues = z.infer<typeof fieldFormSchema>;
+// Ahora FieldFormValues['validationRules'] es:
+// { required: boolean; minLength?: number; ... } | undefined
 
 interface FieldFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (data: FieldFormValues, editingFieldId?: string, sectionId?: string) => Promise<void>;
-    editingField: ExistingFieldData | null; // Null si es para crear
-    currentSectionId: string | null; // Necesario para crear un nuevo campo en la sección correcta
+    editingField: ExistingFieldData | null;
+    currentSectionId: string | null;
     isSubmitting: boolean;
     defaultOrderIndex?: number;
 }
@@ -64,7 +73,7 @@ export default function FieldFormModal({
 }: FieldFormModalProps) {
     const form = useForm<FieldFormValues>({
         resolver: zodResolver(fieldFormSchema),
-        defaultValues: { // Se establecerán en useEffect
+        defaultValues: { // Los valores por defecto deben ser compatibles con FieldFormValues
             label: '',
             fieldType: undefined, // Para que el Select placeholder funcione
             placeholder: '',
@@ -72,7 +81,9 @@ export default function FieldFormModal({
             defaultValue: '',
             orderIndex: defaultOrderIndex,
             options: [],
-            validationRules: {},
+            // validationRules puede ser undefined aquí si es opcional en el esquema,
+            // pero para que el Controller anidado funcione bien, es mejor inicializarlo.
+            validationRules: { required: false }, // Inicializa con un objeto base
         },
     });
 
@@ -84,19 +95,31 @@ export default function FieldFormModal({
     const watchedFieldType = form.watch('fieldType');
     const showOptionsInput = ['select', 'radio', 'checkbox'].includes(watchedFieldType || '');
 
+    const [otherValidationRulesString, setOtherValidationRulesString] = useState('{}');
+
     useEffect(() => {
         if (isOpen) {
+            const defaultInnerValidationRules: ValidationRuleValues = { required: false };
+
             if (editingField) {
+                const currentRulesObject = editingField.validationRules || {}; // Puede ser undefined
+                const { required = false, ...otherRules } = currentRulesObject;
+
                 form.reset({
                     label: editingField.label,
-                    fieldType: editingField.fieldType as FieldFormValues['fieldType'], // Cast si es necesario
+                    fieldType: editingField.fieldType as FieldFormValues['fieldType'],
                     placeholder: editingField.placeholder || '',
                     helpText: editingField.helpText || '',
                     defaultValue: editingField.defaultValue || '',
                     orderIndex: editingField.orderIndex,
                     options: editingField.options || [],
-                    validationRules: editingField.validationRules || {},
+                    validationRules: { // Siempre un objeto para RHF
+                        ...defaultInnerValidationRules, // Incluye todas las claves de ValidationRuleValues como opcionales
+                        ...otherRules,                 // Sobrescribe con las otras reglas existentes
+                        required: required,            // 'required' específico
+                    },
                 });
+                setOtherValidationRulesString(Object.keys(otherRules).length > 0 ? JSON.stringify(otherRules, null, 2) : '{}');
             } else {
                 form.reset({
                     label: '',
@@ -106,82 +129,107 @@ export default function FieldFormModal({
                     defaultValue: '',
                     orderIndex: defaultOrderIndex,
                     options: [],
-                    validationRules: {},
+                    validationRules: defaultInnerValidationRules, // Objeto base para RHF
                 });
+                setOtherValidationRulesString('{}');
             }
         }
     }, [editingField, defaultOrderIndex, form, isOpen]);
 
     const handleFormSubmitInternal: SubmitHandler<FieldFormValues> = (data) => {
-        // Limpiar options si el tipo de campo no los usa
         const dataToSubmit = { ...data };
+
         if (!['select', 'radio', 'checkbox'].includes(dataToSubmit.fieldType)) {
             dataToSubmit.options = undefined;
         }
+
+        try {
+            const otherRulesParsed: Partial<ValidationRuleValues> = JSON.parse(otherValidationRulesString || '{}');
+            const currentRequiredValue = data.validationRules?.required ?? false; // Obtener 'required' de forma segura
+
+            // Empezar construyendo las reglas finales
+            const finalRulesObject: ValidationRuleValues = {
+                ...otherRulesParsed, // Otras reglas del textarea
+                required: currentRequiredValue, // 'required' del checkbox
+            };
+
+            // Condición para determinar si el objeto de reglas está efectivamente "vacío"
+            // (es decir, solo contiene 'required: false' y no hay otras reglas)
+            const noOtherRules = Object.keys(otherRulesParsed).length === 0;
+            const onlyRequiredFalseAndNoOtherRules = noOtherRules && finalRulesObject.required === false;
+
+            // Si el objeto de reglas está "vacío" O si después de la fusión no tiene ninguna clave
+            // (esto último es una doble comprobación por si acaso), entonces establecemos validationRules a undefined.
+            if (onlyRequiredFalseAndNoOtherRules || Object.keys(finalRulesObject).length === 0) {
+                dataToSubmit.validationRules = undefined;
+            } else {
+                // Si hay 'required: false' pero hay otras reglas, debemos eliminar 'required: false'
+                // si no queremos enviarlo al backend (esto depende de tu API)
+                // Por ahora, si 'required' es false y hay otras reglas, lo mantenemos.
+                // Si tu API prefiere no tener 'required: false', descomenta lo siguiente:
+                /*
+                if (finalRulesObject.required === false) {
+                    const { required, ...rulesWithoutRequiredFalse } = finalRulesObject;
+                    if (Object.keys(rulesWithoutRequiredFalse).length > 0) {
+                        dataToSubmit.validationRules = rulesWithoutRequiredFalse;
+                    } else {
+                        dataToSubmit.validationRules = undefined; // Si solo quedaba required:false
+                    }
+                } else {
+                    dataToSubmit.validationRules = finalRulesObject;
+                }
+                */
+                // Lógica simplificada por ahora: enviar el objeto tal como está si no está "vacío"
+                dataToSubmit.validationRules = finalRulesObject;
+            }
+
+        } catch (e) {
+            console.error("Error parseando JSON de otras reglas:", e);
+            toast.error("El JSON de 'Otras Reglas de Validación' es inválido.");
+            return;
+        }
+        
         onSubmit(dataToSubmit, editingField?.id, currentSectionId || undefined);
     };
     
-    // Para validationRules, convertiremos el objeto a JSON string para el Textarea
-    // y al cargar, de JSON string a objeto. (Si usas Textarea para JSON)
-    // Si construyes una UI para validationRules, este manejo cambia.
-    const [validationRulesString, setValidationRulesString] = useState('');
-
-    useEffect(() => {
-        if (editingField?.validationRules) {
-            setValidationRulesString(JSON.stringify(editingField.validationRules, null, 2));
-        } else {
-            setValidationRulesString('{}');
-        }
-    }, [editingField, isOpen]); // Recalcular cuando el modal se abre o cambia el campo a editar
-
-    const handleValidationRulesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setValidationRulesString(e.target.value);
-        try {
-            const parsedRules = JSON.parse(e.target.value);
-            form.setValue('validationRules', parsedRules as ValidationRuleValues, { shouldValidate: true });
-        } catch (err) {
-            // Podrías mostrar un error si el JSON es inválido, o esperar a la validación de Zod
-            form.setError('validationRules', { type: 'manual', message: 'JSON de reglas inválido.' });
-            console.error("Detalles del error:", err); // Ahora 'error' se usa
-
-        }
+    const handleOtherValidationRulesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setOtherValidationRulesString(e.target.value);
     };
-
 
     if (!isOpen) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-lg md:max-w-xl max-h-[90vh] overflow-y-auto p-6">
                 <DialogHeader>
                     <DialogTitle>{editingField ? "Editar Campo" : "Añadir Nuevo Campo"}</DialogTitle>
-                    {editingField && <DialogDescription>Editando: {editingField.label}</DialogDescription>}
+                    {editingField && <DialogDescription>Editando el campo: &quot;{editingField.label}&quot;</DialogDescription>}
                 </DialogHeader>
-                <form onSubmit={form.handleSubmit(handleFormSubmitInternal)} className="space-y-4 py-4">
+                <form onSubmit={form.handleSubmit(handleFormSubmitInternal)} className="space-y-4 mt-4">
                     {/* Label */}
                     <div>
-                        <Label htmlFor="fieldLabel">Etiqueta del Campo</Label>
-                        <Input id="fieldLabel" {...form.register('label')} className="mt-1" />
+                        <Label htmlFor="fieldLabelModal">Etiqueta del Campo</Label>
+                        <Input id="fieldLabelModal" {...form.register('label')} className="mt-1" />
                         {form.formState.errors.label && <p className="text-sm text-red-600 mt-1">{form.formState.errors.label.message}</p>}
                     </div>
 
                     {/* Field Type */}
                     <div>
-                        <Label htmlFor="fieldType">Tipo de Campo</Label>
+                        <Label htmlFor="fieldTypeModal">Tipo de Campo</Label>
                         <Controller
                             name="fieldType"
                             control={form.control}
                             render={({ field }) => (
                                 <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                    <SelectTrigger id="fieldType" className="mt-1">
+                                    <SelectTrigger id="fieldTypeModal" className="mt-1">
                                         <SelectValue placeholder="Selecciona un tipo" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="text">Texto Corto (Input)</SelectItem>
-                                        <SelectItem value="textarea">Texto Largo (Textarea)</SelectItem>
-                                        <SelectItem value="select">Selección (Dropdown)</SelectItem>
+                                        <SelectItem value="text">Texto Corto</SelectItem>
+                                        <SelectItem value="textarea">Texto Largo</SelectItem>
+                                        <SelectItem value="select">Selección</SelectItem>
                                         <SelectItem value="radio">Opciones (Radio)</SelectItem>
-                                        <SelectItem value="checkbox">Casilla Única (Checkbox)</SelectItem> {/* O Múltiples Checkboxes como grupo? */}
+                                        <SelectItem value="checkbox">Casilla (Checkbox individual)</SelectItem>
                                         <SelectItem value="date">Fecha</SelectItem>
                                         <SelectItem value="number">Número</SelectItem>
                                         <SelectItem value="email">Email</SelectItem>
@@ -195,57 +243,80 @@ export default function FieldFormModal({
 
                     {/* Options (condicional) */}
                     {showOptionsInput && (
-                        <div className="space-y-3 p-3 border rounded-md">
-                            <Label className="text-base font-medium">Opciones para &quot;{watchedFieldType}&quot;</Label>
+                        <div className="space-y-3 p-4 border rounded-md bg-gray-50 dark:bg-gray-700/30">
+                            <Label className="text-md font-semibold text-gray-700 dark:text-gray-200">Opciones para &quot;{watchedFieldType}&quot;</Label>
                             {optionsFields.map((item, index) => (
-                                <div key={item.id} className="flex items-center space-x-2">
-                                    <Input {...form.register(`options.${index}.value` as const)} placeholder="Valor (interno)" className="flex-1" />
-                                    <Input {...form.register(`options.${index}.label` as const)} placeholder="Etiqueta (visible)" className="flex-1" />
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(index)} className="text-red-500">
+                                <div key={item.id} className="flex items-end space-x-2">
+                                    <div className="flex-1">
+                                        <Label htmlFor={`optionValue${index}`} className="text-xs">Valor (interno)</Label>
+                                        <Input id={`optionValue${index}`} {...form.register(`options.${index}.value` as const)} placeholder="ej: opcion_1" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <Label htmlFor={`optionLabel${index}`} className="text-xs">Etiqueta (visible)</Label>
+                                        <Input id={`optionLabel${index}`} {...form.register(`options.${index}.label` as const)} placeholder="Ej: Opción 1" />
+                                    </div>
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeOption(index)} className="text-red-500 hover:bg-red-100 dark:hover:bg-red-700/50 h-9 w-9">
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
                             ))}
-                            {/* Mostrar errores para el array de opciones o sus items si es necesario */}
-                            {form.formState.errors.options?.root && <p className="text-sm text-red-600 mt-1">{form.formState.errors.options.root.message}</p>}
-                            {optionsFields.map((_, index) => (
-                                form.formState.errors.options?.[index]?.value && <p key={`err-val-${index}`} className="text-sm text-red-600">{form.formState.errors.options[index]?.value?.message}</p>
-                            ))}
-                             {optionsFields.map((_, index) => (
-                                form.formState.errors.options?.[index]?.label && <p key={`err-lab-${index}`} className="text-sm text-red-600">{form.formState.errors.options[index]?.label?.message}</p>
-                            ))}
-                            <Button type="button" variant="outline" size="sm" onClick={() => appendOption({ value: '', label: '' })}>
+                            {form.formState.errors.options && <p className="text-sm text-red-600 mt-1">Corrija los errores en las opciones.</p>}
+                            <Button type="button" variant="outline" size="sm" onClick={() => appendOption({ value: '', label: '' })} className="mt-2">
                                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Opción
                             </Button>
                         </div>
                     )}
 
-                    {/* Placeholder, HelpText, DefaultValue */}
-                    <div><Label htmlFor="fieldPlaceholder">Texto de Ejemplo (Placeholder)</Label><Input id="fieldPlaceholder" {...form.register('placeholder')} className="mt-1" /></div>
-                    <div><Label htmlFor="fieldHelpText">Texto de Ayuda</Label><Textarea id="fieldHelpText" {...form.register('helpText')} className="mt-1" /></div>
-                    <div><Label htmlFor="fieldDefaultValue">Valor por Defecto</Label><Input id="fieldDefaultValue" {...form.register('defaultValue')} className="mt-1" /></div>
-                    
-                    {/* Order Index */}
+                    {/* Placeholder, HelpText, DefaultValue, OrderIndex */}
+                    <div><Label htmlFor="fieldPlaceholderModal">Texto de Ejemplo (Placeholder)</Label><Input id="fieldPlaceholderModal" {...form.register('placeholder')} className="mt-1" /></div>
+                    <div><Label htmlFor="fieldHelpTextModal">Texto de Ayuda</Label><Textarea id="fieldHelpTextModal" {...form.register('helpText')} className="mt-1" /></div>
+                    <div><Label htmlFor="fieldDefaultValueModal">Valor por Defecto</Label><Input id="fieldDefaultValueModal" {...form.register('defaultValue')} className="mt-1" /></div>
                     <div>
-                        <Label htmlFor="fieldOrderIndex">Orden del Campo</Label>
-                        <Input id="fieldOrderIndex" type="number" {...form.register('orderIndex')} className="mt-1" />
+                        <Label htmlFor="fieldOrderIndexModal">Orden del Campo</Label>
+                        <Input id="fieldOrderIndexModal" type="number" {...form.register('orderIndex')} className="mt-1" />
                         {form.formState.errors.orderIndex && <p className="text-sm text-red-600 mt-1">{form.formState.errors.orderIndex.message}</p>}
                     </div>
+                    
+                    {/* Validation Rules UI */}
+                    <div className="pt-2 space-y-3 p-4 border rounded-md bg-gray-50 dark:bg-gray-700/30">
+                        <Label className="text-md font-semibold text-gray-700 dark:text-gray-200">Reglas de Validación</Label>
+                        <div className="items-top flex space-x-3">
+                            {/* Controller para validationRules.required */}
+                            <Controller
+                                name="validationRules.required" // Accede a la propiedad anidada
+                                control={form.control}
+                                // RHF inicializará validationRules como {required: false} basado en defaultValues
+                                render={({ field }) => (
+                                    <Checkbox
+                                        id="fieldRequiredModal"
+                                        checked={field.value} // field.value será boolean
+                                        onCheckedChange={field.onChange}
+                                        onBlur={field.onBlur}
+                                    />
+                                )}
+                            />
+                            <div className="grid gap-1.5 leading-none">
+                                <Label htmlFor="fieldRequiredModal" className="text-sm font-medium">¿Campo Requerido?</Label>
+                                <p className="text-xs text-muted-foreground">Marcar si este campo es obligatorio.</p>
+                            </div>
+                        </div>
+                        {form.formState.errors.validationRules?.required && (
+                            <p className="text-sm text-red-600 mt-1">{form.formState.errors.validationRules.required.message}</p>
+                        )}
 
-                    {/* Validation Rules (como Textarea para JSON) */}
-                    <div>
-                        <Label htmlFor="fieldValidationRules">Reglas de Validación (JSON)</Label>
-                        <Textarea
-                            id="fieldValidationRules"
-                            value={validationRulesString}
-                            onChange={handleValidationRulesChange}
-                            className="mt-1 min-h-[100px] font-mono text-sm"
-                            placeholder='Ej: { "required": true, "minLength": 5 }'
-                        />
-                        {form.formState.errors.validationRules && <p className="text-sm text-red-600 mt-1">{form.formState.errors.validationRules.message}</p>}
+                        <div>
+                            <Label htmlFor="fieldOtherValidationRulesModal">Otras Reglas (JSON)</Label>
+                            <Textarea
+                                id="fieldOtherValidationRulesModal"
+                                value={otherValidationRulesString}
+                                onChange={handleOtherValidationRulesChange}
+                                className="mt-1 min-h-[80px] font-mono text-sm"
+                                placeholder='Ej: { "minLength": 5 }'
+                            />
+                        </div>
                     </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="pt-4">
                         <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancelar</Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
