@@ -6,6 +6,8 @@ const cors = require('cors');
 const db = require('./models'); // Asegúrate de que index.js en models exporte sequelize
 const authRoutes = require('./routes/auth.routes');
 const adminRoutes = require('./routes/admin.routes');   // Importa las rutas de admin.routes.js
+const assessmentRoutes = require('./routes/assessment.routes'); // Importa las rutas de assessment.routes.js
+
 
 const app = express();
 
@@ -22,6 +24,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRoutes);   // Usa las rutas de auth.routes.js
 app.use('/api/admin', adminRoutes); // Usa las rutas de admin.routes.js
+app.use('/api/app', assessmentRoutes); // Usa las rutas de assessment.routes.js
 // Aquí puedes agregar más rutas según sea necesario
 
 

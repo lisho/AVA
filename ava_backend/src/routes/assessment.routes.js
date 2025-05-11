@@ -6,6 +6,7 @@ const valuationTypeController = require('../controllers/valuationType.controller
 const { verifyToken, isTrabajadorSocial, isAdmin } = require('../middleware/auth.middleware'); // isAdmin puede ser necesario para algunos endpoints de admin
 
 // Rutas para el trabajador social (o admin)
+/*
 router.get(
     '/valuation-types/active', 
     [verifyToken, isTrabajadorSocial], // Solo trabajadores sociales o admins pueden ver los tipos activos
@@ -17,6 +18,18 @@ router.get(
     [verifyToken, isTrabajadorSocial], 
     valuationTypeController.findStructureById // Necesitaremos añadir este método
 );
+*/
+
+
+router.get('/valuation-types/active', [verifyToken, isTrabajadorSocial], (req, res, next) => {
+    console.log('BACKEND: Accediendo a /api/app/valuation-types/active');
+    next();
+}, valuationTypeController.findAllActive);
+
+router.get('/assessments', [verifyToken, isTrabajadorSocial], (req, res, next) => {
+    console.log('BACKEND: Accediendo a /api/app/assessments');
+    next();
+}, assessmentController.findUserAssessments);
 
 router.post(
     '/assessments', 

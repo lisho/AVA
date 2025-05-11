@@ -7,7 +7,7 @@ const { Op } = require("sequelize"); // Para búsquedas
 // Simulación del cliente de IA (reemplaza con tu cliente real, ej. OpenAI)
 const { generateIaReport } = require('../services/ia.service'); // Crearemos este servicio
 // Para PDF (reemplaza con tu librería, ej. Puppeteer)
-const { generatePdfFromHtml } = require('../services/pdf.service'); // Crearemos este servicio
+//const { generatePdfFromHtml } = require('../services/pdf.service'); // Crearemos este servicio
 
 
 // Formatear los datos del formulario para la IA
