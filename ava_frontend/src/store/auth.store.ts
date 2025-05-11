@@ -40,7 +40,15 @@ export const useAuthStore = create<AuthState>()(
                         '/auth/login',
                         { email, password }
                     );
+
+                    console.log("AuthStore login: raw response.data", JSON.stringify(response.data, null, 2)); // Loguea toda la respuesta
+                    
                     const { user, token } = response.data;
+
+                    console.log("AuthStore login: response.data", response.data); 
+                    console.log("AuthStore login: user from response", user);
+                    console.log("AuthStore login: token from response", token);
+
                     set({ user, token, isAuthenticated: true, isLoading: false });
                     console.log('Login exitoso (store):', user);
                 } catch (error) {

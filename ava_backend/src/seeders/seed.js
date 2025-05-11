@@ -16,6 +16,7 @@ const seedDatabase = async () => {
 
         // Crear Usuario Admin
         const adminPassword = 'adminpassword'; // Cambiar en producción
+        const workerPassword = 'workerpassword'; // Cambiar en producción
         // const salt = await bcrypt.genSalt(10); // El hook User.beforeCreate ya lo hace
         // const hashedPassword = await bcrypt.hash(adminPassword, salt); // El hook lo hace
 
@@ -26,6 +27,14 @@ const seedDatabase = async () => {
             roleId: adminRole.id
         });
         console.log('Usuario administrador creado.');
+        
+        await db.User.create({
+            name: 'tst',
+            email: 'worker@example.com',
+            passwordHash: workerPassword, // El hook se encarga del hash
+            roleId: workerRole.id // Asumiendo que workerRole es el ID del rol 'trabajador_social'
+        });
+        console.log('Usuario trabajador social creado.');
 
         console.log('Sembrado de base de datos completado.');
     } catch (error) {

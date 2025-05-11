@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'; // Utilidad de shadcn/ui para classnames
 import { LayoutDashboard, ListChecks, /*Users, Settings*/ } from 'lucide-react'; // Iconos de ejemplo
 
 const navItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/admin_dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/valuation-types', label: 'Tipos de Valoración', icon: ListChecks },
     // { href: '/users', label: 'Usuarios', icon: Users }, // Futuro
     // { href: '/settings', label: 'Configuración', icon: Settings }, // Futuro
@@ -20,13 +20,13 @@ export default function AdminSidebar() {
         <aside className="w-64 bg-gray-50 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
             <div className="h-16 flex items-center justify-center border-b border-gray-200 dark:border-gray-700">
                 {/* Puedes poner un logo o título de la app aquí */}
-                <Link href="/dashboard" className="text-2xl font-bold text-gray-800 dark:text-white">
+                <Link href="/admin_dashboard" className="text-2xl font-bold text-gray-800 dark:text-white">
                     AVA IA
                 </Link>
             </div>
             <nav className="flex-grow p-4 space-y-2">
                 {navItems.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                    const isActive = pathname === item.href || (item.href !== '/admin_dashboard' && pathname.startsWith(item.href));
                     return (
                         <Link
                             key={item.href}
