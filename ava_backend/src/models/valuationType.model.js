@@ -28,5 +28,10 @@ module.exports = (sequelize, DataTypes) => {
         tableName: 'valuation_types',
         timestamps: true,
     });
+
+    ValuationType.associate = (models) => {
+    ValuationType.hasMany(models.Assessment, { foreignKey: 'valuationTypeId', as: 'assessments' });
+    // ... otras asociaciones de ValuationType ...
+};
     return ValuationType;
 };

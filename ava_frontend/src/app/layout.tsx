@@ -20,10 +20,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
-        <div style={{ border: '5px solid green', padding: '20px', margin: '5px' }}>
-          <h1>Root Layout Container</h1>
+        {/*<div style={{ border: '5px solid green', padding: '20px', margin: '5px' }}>*/}
+          {/*<h1>Root Layout Container</h1>*/}
           {children}
-        </div>
+        {/*</div>*/}
         {/* <Toaster richColors position="top-right" /> */}
       </body>
     </html>

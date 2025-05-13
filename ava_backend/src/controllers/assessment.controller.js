@@ -3,6 +3,8 @@ const db = require('../models');
 const Assessment = db.Assessment;
 const ValuationType = db.ValuationType;
 const FormField = db.FormField; // Para validar datos del formulario
+const User = db.User; // Para verificar permisos
+
 const { Op } = require("sequelize"); // Para búsquedas
 // Simulación del cliente de IA (reemplaza con tu cliente real, ej. OpenAI)
 const { generateIaReport } = require('../services/ia.service'); // Crearemos este servicio
@@ -27,13 +29,15 @@ function formatDataForIA(formData, fields) {
     return formattedText;
 }
 
-
 exports.createAssessmentAndGenerateReport = async (req, res) => {
     const { valuationTypeId, formData } = req.body;
-    const userId = req.userId; // Del middleware verifyToken
+    const userId = req.userId; 
+    console.log('[ASSESSMENT CTRL POST /assessments] Received data:', { valuationTypeId, userId, formDataPreview: JSON.stringify(formData, null, 2).substring(0, 200) + '...' });
 
-    if (!valuationTypeId || !formData) {
-        return res.status(400).json({ message: "valuationTypeId y formData son requeridos." });
+
+    if (!valuationTypeId || !formData || typeof formData !== 'object' || Object.keys(formData).length === 0) {
+        console.error('[ASSESSMENT CTRL POST /assessments] Error: valuationTypeId o formData inválidos.', { valuationTypeId, formData });
+        return res.status(400).json({ message: "valuationTypeId y un objeto formData válido y no vacío son requeridos." });
     }
 
     try {
@@ -46,51 +50,62 @@ exports.createAssessmentAndGenerateReport = async (req, res) => {
         });
 
         if (!valuationType) {
+            console.error(`[ASSESSMENT CTRL POST /assessments] Error: ValuationType con ID ${valuationTypeId} no encontrado.`);
             return res.status(404).json({ message: "Tipo de valoración no encontrado." });
         }
         if (!valuationType.isActive) {
+            console.error(`[ASSESSMENT CTRL POST /assessments] Error: ValuationType con ID ${valuationTypeId} no está activo.`);
             return res.status(400).json({ message: "Este tipo de valoración no está activo." });
         }
 
-        // TODO: Validación de formData contra los fields de valuationType.sections
-        // (ej. campos requeridos, tipos de datos si es necesario)
+        // Validación básica de formData (puedes hacerla más exhaustiva)
+        // Por ejemplo, verificar que todas las claves en formData corresponden a IDs de campos existentes
+        // y que los campos requeridos están presentes.
+        // Esta es una validación simple:
+        const allFieldIdsInStructure = valuationType.sections.flatMap(s => s.fields.map(f => f.id));
+        for (const key in formData) {
+            if (!allFieldIdsInStructure.includes(key)) {
+                console.warn(`[ASSESSMENT CTRL POST /assessments] Advertencia: formData contiene una clave inesperada '${key}' que no es un ID de campo conocido.`);
+                // Podrías decidir eliminarla o simplemente advertir
+            }
+        }
+        // Aquí podrías añadir lógica para verificar campos requeridos de 'valuationType.sections' en 'formData'
 
         const systemPrompt = valuationType.systemPrompt;
-        const formattedInputs = formatDataForIA(formData, valuationType.sections);
+        const formattedInputs = formatDataForIA(formData, valuationType.sections); // Asegúrate que esta función existe y es robusta
         
         let reportText = null;
         try {
-            console.log("Enviando a IA. Prompt:", systemPrompt.substring(0,100)+"...", "Inputs:", formattedInputs.substring(0,200)+"...");
             reportText = await generateIaReport(systemPrompt, formattedInputs);
-            console.log("Respuesta de IA recibida.");
         } catch (iaError) {
-            console.error("Error al generar informe con IA:", iaError);
-            // Decidir si guardar la valoración sin informe o devolver error
-            // Por ahora, guardaremos con informe null y un mensaje de error.
-            toast.error("Hubo un problema al generar el informe con la IA.");
-            // Continuamos para guardar la valoración con el informe como null
+            console.error("[ASSESSMENT CTRL POST /assessments] Error al generar informe con IA:", iaError);
+            // Se guardará con reportText = null
         }
-
 
         const newAssessment = await Assessment.create({
             userId,
             valuationTypeId,
-            formData,
+            formData, // formData debe ser un objeto JSON
             generatedReportText: reportText,
         });
+        console.log('[ASSESSMENT CTRL POST /assessments] Nueva valoración creada, ID:', newAssessment.id);
 
         res.status(201).json({
             message: "Valoración creada exitosamente.",
             assessment: newAssessment,
-            // Si el informe es null, el frontend debería indicar que hubo un problema con la IA
         });
 
     } catch (error) {
-        console.error("Error al crear la valoración:", error);
-        res.status(500).json({ message: "Error interno del servidor al crear la valoración." });
+        console.error("[ASSESSMENT CTRL POST /assessments] Error CRÍTICO al crear la valoración:", error);
+        console.error("[ASSESSMENT CTRL POST /assessments] Error stack:", error.stack);
+        if (error.name === 'SequelizeForeignKeyConstraintError') {
+             console.error("[ASSESSMENT CTRL POST /assessments] Detalle FK Error:", error.fields, error.index, error.parent?.toString());
+        } else if (error.name === 'SequelizeValidationError') {
+            console.error("[ASSESSMENT CTRL POST /assessments] Detalle Validation Error:", error.errors.map(e => ({ field: e.path, message: e.message })));
+        }
+        res.status(500).json({ message: "Error interno del servidor al crear la valoración.", errorDetails: error.message });
     }
 };
-
 
 exports.downloadAssessmentPDF = async (req, res) => {
     const { assessmentId } = req.params;
@@ -163,20 +178,137 @@ exports.downloadAssessmentPDF = async (req, res) => {
 
 exports.findUserAssessments = async (req, res) => {
     const userId = req.userId;
-    // Podrías añadir paginación aquí con req.query.page y req.query.limit
-    try {
-        const assessments = await Assessment.findAll({
+    const { page = 1, limit = 10 } = req.query; // Paginación básica
+    const offset = (page - 1) * limit;
+    
+   try {
+        const { count, rows } = await Assessment.findAndCountAll({
             where: { userId: userId },
-            include: [ // Incluir datos relacionados para mostrar en la lista
-                { model: ValuationType, as: 'valuationType', attributes: ['id', 'name'] }
+            include: [
+                { 
+                    model: ValuationType, 
+                    as: 'valuationType', 
+                    attributes: ['id', 'name'] 
+                },
+                // Podrías incluir el usuario si fuera necesario, pero ya filtramos por userId
+                { 
+                    model: User, 
+                    as: 'user', 
+                    attributes: ['id', 'name', 'email'] 
+                }
             ],
-            order: [['createdAt', 'DESC']], // Más recientes primero
-            // limit: 10, // Ejemplo de paginación
-            // offset: 0,
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset),
         });
-        res.status(200).json(assessments);
+
+        res.status(200).json({
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: parseInt(page),
+            assessments: rows,
+        });
     } catch (error) {
-        console.error("Error al obtener valoraciones del usuario:", error);
+        console.error("[ASSESSMENT CTRL GET /assessments] Error al obtener valoraciones del usuario:", error);
         res.status(500).json({ message: "Error interno al obtener las valoraciones." });
+    }
+};
+
+// GET: Obtener una valoración específica por su ID
+exports.findOneAssessment = async (req, res) => {
+    const { assessmentId } = req.params;
+    const userId = req.userId;
+
+    try {
+        const assessment = await Assessment.findOne({
+            where: { id: assessmentId },
+            include: [
+                { model: ValuationType, as: 'valuationType', attributes: ['id', 'name', 'description'] },
+                { model: User, as: 'user', attributes: ['id', 'name', 'email'] } // Para mostrar quién la hizo
+            ]
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ message: "Valoración no encontrada." });
+        }
+
+        // Verificar permisos: el usuario solo puede ver sus propias valoraciones o un admin puede ver cualquiera
+        if (assessment.userId !== userId && req.userRole !== 'admin') {
+            return res.status(403).json({ message: "No autorizado para acceder a esta valoración." });
+        }
+
+        res.status(200).json(assessment);
+    } catch (error) {
+        console.error(`[ASSESSMENT CTRL GET /assessments/${assessmentId}] Error al obtener la valoración:`, error);
+        res.status(500).json({ message: "Error interno al obtener la valoración." });
+    }
+};
+
+// PUT: Actualizar una valoración específica
+exports.updateAssessment = async (req, res) => {
+    const { assessmentId } = req.params;
+    const userId = req.userId;
+    const { formData, generatedReportText } = req.body; // Campos que se podrían actualizar
+
+    // Validar qué campos se pueden actualizar y si formData es válido
+    if (!formData && !generatedReportText) {
+        return res.status(400).json({ message: "Se requiere al menos un campo para actualizar (formData o generatedReportText)." });
+    }
+
+    try {
+        const assessment = await Assessment.findByPk(assessmentId);
+
+        if (!assessment) {
+            return res.status(404).json({ message: "Valoración no encontrada para actualizar." });
+        }
+
+        if (assessment.userId !== userId && req.userRole !== 'admin') {
+            return res.status(403).json({ message: "No autorizado para actualizar esta valoración." });
+        }
+
+        // Construir objeto de actualización
+        const updateData = {};
+        if (formData) updateData.formData = formData; // TODO: Validar formData si se actualiza
+        if (generatedReportText) updateData.generatedReportText = generatedReportText;
+
+        const [numberOfAffectedRows, updatedAssessments] = await Assessment.update(updateData, {
+            where: { id: assessmentId },
+            returning: true, // Para PostgreSQL, devuelve los registros actualizados
+        });
+
+        if (numberOfAffectedRows > 0) {
+            res.status(200).json({ message: "Valoración actualizada exitosamente.", assessment: updatedAssessments[0] });
+        } else {
+            // Esto no debería pasar si findByPk encontró el assessment
+            res.status(404).json({ message: "Valoración no encontrada después del intento de actualización." });
+        }
+    } catch (error) {
+        console.error(`[ASSESSMENT CTRL PUT /assessments/${assessmentId}] Error al actualizar la valoración:`, error);
+        res.status(500).json({ message: "Error interno al actualizar la valoración." });
+    }
+};
+
+// DELETE: Eliminar una valoración específica
+exports.deleteAssessment = async (req, res) => {
+    const { assessmentId } = req.params;
+    const userId = req.userId;
+
+    try {
+        const assessment = await Assessment.findByPk(assessmentId);
+
+        if (!assessment) {
+            return res.status(404).json({ message: "Valoración no encontrada para eliminar." });
+        }
+
+        if (assessment.userId !== userId && req.userRole !== 'admin') {
+            return res.status(403).json({ message: "No autorizado para eliminar esta valoración." });
+        }
+
+        await assessment.destroy(); // O Assessment.destroy({ where: { id: assessmentId } });
+
+        res.status(200).json({ message: "Valoración eliminada exitosamente." });
+    } catch (error) {
+        console.error(`[ASSESSMENT CTRL DELETE /assessments/${assessmentId}] Error al eliminar la valoración:`, error);
+        res.status(500).json({ message: "Error interno al eliminar la valoración." });
     }
 };
