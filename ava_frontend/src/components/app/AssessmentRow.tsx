@@ -19,7 +19,7 @@ export default function AssessmentRow({
     assessment,
     onDownloadPdf,
     onOpenDeleteDialog,
-    onEdit,
+    //onEdit,
 }: AssessmentRowProps) {
     
     const router = useRouter();
@@ -47,6 +47,16 @@ export default function AssessmentRow({
                     <Eye className="h-4 w-4" />
                     
                 </Button>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => router.push(`/valoraciones/editar-datos/${assessment.id}`)} // Nueva ruta
+                    title="Editar Datos del Formulario"
+                    className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+                >
+                    <Edit className="h-4 w-4" />
+                </Button>
+
                 <Button 
                     variant="outline" 
                     size="icon"
@@ -58,17 +68,7 @@ export default function AssessmentRow({
                     <Download className="h-4 w-4" />
                      
                 </Button>
-                <Button 
-                    variant="outline" 
-                    size="icon" 
-                    onClick={() => onEdit(assessment)} // Placeholder para editar
-                    title="Editar Valoración (Futuro)"
-                    disabled // Deshabilitado por ahora
-                    className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
-                >
-                    <Edit className="h-4 w-4" />
-                     
-                </Button> 
+
                 <Button 
                     variant="destructive" 
                     size="icon" 

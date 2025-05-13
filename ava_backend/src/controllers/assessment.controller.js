@@ -248,42 +248,62 @@ exports.findOneAssessment = async (req, res) => {
 exports.updateAssessment = async (req, res) => {
     const { assessmentId } = req.params;
     const userId = req.userId;
-    const { formData, generatedReportText } = req.body; // Campos que se podrían actualizar
+    const { formData, generatedReportText } = req.body; // Ahora puede recibir ambos
 
-    // Validar qué campos se pueden actualizar y si formData es válido
-    if (!formData && !generatedReportText) {
-        return res.status(400).json({ message: "Se requiere al menos un campo para actualizar (formData o generatedReportText)." });
+    if (formData === undefined && generatedReportText === undefined) {
+        return res.status(400).json({ message: "Se requiere al menos 'formData' o 'generatedReportText' para actualizar." });
     }
 
     try {
         const assessment = await Assessment.findByPk(assessmentId);
 
         if (!assessment) {
-            return res.status(404).json({ message: "Valoración no encontrada para actualizar." });
+            return res.status(404).json({ message: "Valoración no encontrada." });
         }
-
         if (assessment.userId !== userId && req.userRole !== 'admin') {
             return res.status(403).json({ message: "No autorizado para actualizar esta valoración." });
         }
 
-        // Construir objeto de actualización
         const updateData = {};
-        if (formData) updateData.formData = formData; // TODO: Validar formData si se actualiza
-        if (generatedReportText) updateData.generatedReportText = generatedReportText;
+        let reportNeedsRegeneration = false;
 
+        if (formData !== undefined) {
+            // TODO: Validación exhaustiva de formData contra la estructura del ValuationType es MUY RECOMENDADA aquí.
+            // Por ahora, asumimos que el frontend envía un formData con la estructura correcta de { fieldId: value }
+            if (typeof formData !== 'object' || formData === null) {
+                return res.status(400).json({ message: "El campo 'formData' debe ser un objeto válido." });
+            }
+            updateData.formData = formData;
+            updateData.generatedReportText = null; // Borrar informe si los datos del formulario cambian
+            reportNeedsRegeneration = true;
+            console.log(`[ASSESSMENT CTRL PUT /assessments/${assessmentId}] formData actualizado, informe borrado.`);
+        }
+
+        if (generatedReportText !== undefined) { // Esto se usará más tarde desde la vista individual
+            updateData.generatedReportText = generatedReportText;
+            console.log(`[ASSESSMENT CTRL PUT /assessments/${assessmentId}] generatedReportText actualizado.`);
+        }
+        
         const [numberOfAffectedRows, updatedAssessments] = await Assessment.update(updateData, {
             where: { id: assessmentId },
-            returning: true, // Para PostgreSQL, devuelve los registros actualizados
+            returning: true,
         });
 
         if (numberOfAffectedRows > 0) {
-            res.status(200).json({ message: "Valoración actualizada exitosamente.", assessment: updatedAssessments[0] });
+            const responsePayload = { 
+                message: "Valoración actualizada exitosamente.", 
+                assessment: updatedAssessments[0],
+                reportNeedsRegeneration 
+            };
+            if (reportNeedsRegeneration) {
+                responsePayload.message = "Datos de la valoración actualizados. El informe previo ha sido borrado y necesita ser regenerado.";
+            }
+            res.status(200).json(responsePayload);
         } else {
-            // Esto no debería pasar si findByPk encontró el assessment
-            res.status(404).json({ message: "Valoración no encontrada después del intento de actualización." });
+            res.status(404).json({ message: "Valoración no encontrada (post-actualización)." });
         }
     } catch (error) {
-        console.error(`[ASSESSMENT CTRL PUT /assessments/${assessmentId}] Error al actualizar la valoración:`, error);
+        console.error(`[ASSESSMENT CTRL PUT /assessments/${assessmentId}] Error al actualizar valoración:`, error);
         res.status(500).json({ message: "Error interno al actualizar la valoración." });
     }
 };
