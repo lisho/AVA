@@ -4,6 +4,12 @@ export interface ActiveValuationType {
     description?: string | null;
 }
 
+export interface UserForAssessmentDetails { // Un tipo para el usuario anidado
+    id: string;
+    name: string | null;
+    email: string;
+}
+
 export interface UserAssessment {
     id: string;
     valuationTypeId: string;
@@ -15,7 +21,9 @@ export interface UserAssessment {
     valuationType?: {
         id: string;
         name: string;
+        description?: string | null; // Añadido si el backend lo envía
     };
+    user?: UserForAssessmentDetails; 
     generatedReportText?: string | null;
     
     formData: Record<string, unknown>; // <--- AÑADE ESTO para recibir los datos del formulario
@@ -68,21 +76,4 @@ export interface FormStructure {
     name: string;
     description?: string | null;
     sections: FormSectionData[];
-}
-
-// Interfaz para un Assessment existente
-export interface UserAssessment {
-    id: string;
-    valuationTypeId: string;
-    userId: string;
-    createdAt: string;
-    updatedAt: string;
-    valuationType?: { // Para mostrar el nombre del tipo
-        id: string;
-        name: string;
-    };
-    generatedReportText?: string | null;
-    formData: Record<string, unknown>; // Valores crudos del formulario
-    extractedSubjectName?: string; 
-    extractedSubjectLastName?: string;
 }

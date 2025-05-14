@@ -36,6 +36,12 @@ router.post(
     assessmentController.createAssessmentAndGenerateReport
 );
 
+router.post(
+    '/assessments/:assessmentId/generate-report', 
+    [verifyToken, isTrabajadorSocial],
+    assessmentController.generateOrRegenerateReport 
+);
+
 router.get(
     '/assessments/:assessmentId/pdf', 
     [verifyToken, isTrabajadorSocial], 

@@ -332,3 +332,71 @@ exports.deleteAssessment = async (req, res) => {
         res.status(500).json({ message: "Error interno al eliminar la valoración." });
     }
 };
+
+exports.generateOrRegenerateReport = async (req, res) => {
+    const { assessmentId } = req.params;
+    const userId = req.userId; // Para verificar permisos si es necesario
+
+    console.log(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Iniciando generación de informe.`);
+
+    try {
+        const assessment = await Assessment.findOne({
+            where: { id: assessmentId },
+            include: [{ model: ValuationType, as: 'valuationType' }] // Necesitamos el systemPrompt
+        });
+
+        if (!assessment) {
+            console.error(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Valoración no encontrada.`);
+            return res.status(404).json({ message: "Valoración no encontrada." });
+        }
+
+        // Verificar permisos (opcional aquí si ya se verificó al cargar la valoración en el frontend)
+        if (assessment.userId !== userId && req.userRole !== 'admin') {
+            console.warn(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Intento no autorizado por usuario ${userId}.`);
+            return res.status(403).json({ message: "No autorizado para esta acción." });
+        }
+
+        if (!assessment.formData) {
+            console.error(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] formData está vacío o no existe.`);
+            return res.status(400).json({ message: "No hay datos de formulario para generar el informe." });
+        }
+        if (!assessment.valuationType?.systemPrompt) {
+            console.error(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] SystemPrompt no encontrado para el tipo de valoración.`);
+            return res.status(500).json({ message: "Error de configuración: No se encontró el prompt del sistema." });
+        }
+        
+        // Necesitamos la estructura de campos para formatear los datos para la IA
+        // Esta parte es similar a createAssessmentAndGenerateReport
+        const valuationTypeWithFields = await ValuationType.findByPk(assessment.valuationTypeId, {
+            include: [{
+                model: db.FormSection, // Asegúrate que db.FormSection esté disponible
+                as: 'sections',
+                include: [{ model: db.FormField, as: 'fields' }] // Asegúrate que db.FormField esté disponible
+            }]
+        });
+
+        if (!valuationTypeWithFields || !valuationTypeWithFields.sections) {
+            console.error(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] No se pudo cargar la estructura de campos para formatear datos.`);
+            return res.status(500).json({ message: "Error de configuración: No se pudo cargar la estructura de campos." });
+        }
+
+        const formattedInputs = formatDataForIA(assessment.formData, valuationTypeWithFields.sections); // Usa la función helper
+        
+        console.log(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Enviando a IA...`);
+        const reportText = await generateIaReport(assessment.valuationType.systemPrompt, formattedInputs);
+        console.log(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Informe recibido de IA.`);
+
+        assessment.generatedReportText = reportText;
+        await assessment.save();
+
+        res.status(200).json({
+            message: "Informe generado/regenerado exitosamente.",
+            assessmentId: assessment.id,
+            generatedReportText: reportText,
+        });
+
+    } catch (error) {
+        console.error(`[ASSESSMENT CTRL POST /assessments/${assessmentId}/generate-report] Error CRÍTICO:`, error);
+        res.status(500).json({ message: "Error interno al generar/regenerar el informe.", errorDetails: error.message });
+    }
+};
