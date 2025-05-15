@@ -1,3 +1,31 @@
+// src/types/index.ts (o assessment.ts)
+
+// Interfaz de referencia, no usada directamente por Zod para inferir FieldFormValues
+export interface ValidationRuleValues {
+    required?: boolean;
+    minLength?: number;
+    maxLength?: number;
+    pattern?: string;
+    min?: number;
+    max?: number;
+    customMessage?: string;
+}
+
+export type FieldTypeUnion = 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'checkbox-group' | 'date' | 'number' | 'email' | 'tel';
+
+export interface FormFieldData { // Este es el tipo para `editingField`
+    id: string;
+    label: string;
+    fieldType: FieldTypeUnion;
+    sectionId: string;
+    options?: Array<{ value: string; label: string }>;
+    validationRules?: ValidationRuleValues; // Esta es la interfaz, puede ser undefined
+    orderIndex: number;
+    placeholder?: string | null;
+    helpText?: string | null;
+    defaultValue?: string | null;
+}
+
 export interface ActiveValuationType {
     id: string;
     name: string;
@@ -38,7 +66,7 @@ export interface PaginatedAssessmentsResponse {
     currentPage: number;
     assessments: UserAssessment[];
 }
-
+/*
 export interface ValidationRuleValues {
     required?: boolean;
     minLength?: number;
@@ -48,19 +76,8 @@ export interface ValidationRuleValues {
     max?: number;
     customMessage?: string;
 }
+*/
 
-export interface FormFieldData {
-    id: string;
-    label: string;
-    fieldType: string; // Considera usar un tipo string literal union: 'text' | 'textarea' | ...
-    sectionId: string; // Importante para cuando editas/guardas un campo
-    options?: Array<{ value: string; label: string }>;
-    validationRules?: ValidationRuleValues;
-    orderIndex: number;
-    placeholder?: string | null;
-    helpText?: string | null;
-    defaultValue?: string | null; // Este es el default configurado en el builder
-}
 
 export interface FormSectionData {
     id: string;
@@ -76,4 +93,20 @@ export interface FormStructure {
     name: string;
     description?: string | null;
     sections: FormSectionData[];
+}
+
+export interface FormStructureWithSections {
+    id: string;
+    name: string;
+    description?: string | null;
+    sections: FormSectionData[];
+}
+
+export interface ValuationTypeWithStructure {
+    id: string;
+    name: string;
+    description?: string | null;
+    systemPrompt: string;
+    isActive: boolean;
+    sections: FormSectionData[]; // Usa la FormSectionData definida arriba
 }

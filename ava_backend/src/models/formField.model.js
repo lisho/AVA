@@ -12,7 +12,18 @@ module.exports = (sequelize, DataTypes) => {
             allowNull: false,
         },
         fieldType: {
-            type: DataTypes.ENUM('text', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'email', 'tel'),
+            type: DataTypes.ENUM(
+                'text', 
+                'textarea', 
+                'select', 
+                'radio', 
+                'checkbox', 
+                'checkbox-group', 
+                'date', 
+                'number', 
+                'email', 
+                'tel'
+            ),
             allowNull: false,
         },
         // Para 'select', 'radio', 'checkbox', guardaremos un array de objetos: [{value: 'val1', label: 'Label 1'}, ...]

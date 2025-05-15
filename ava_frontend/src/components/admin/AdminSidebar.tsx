@@ -22,8 +22,9 @@ export default function AdminSidebar() {
                 {/* Puedes poner un logo o título de la app aquí */}
                 <Link href="/admin_dashboard" className="text-2xl font-bold text-gray-800 dark:text-white">
                     AVA IA
-                </Link>
+                </Link>       
             </div>
+           
             <nav className="flex-grow p-4 space-y-2">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/admin_dashboard' && pathname.startsWith(item.href));

@@ -159,20 +159,61 @@ if (field.fieldType === 'number') {
                     )}
                 />
             );
-        case 'checkbox':
+        case 'checkbox': // Checkbox individual (booleano)
              return (
                 <Controller
                     name={fieldName}
                     control={control}
+                    // 'required' para un checkbox individual significa que debe estar marcado si la regla 'required' es true.
                     rules={inputValidationRules.required ? { required: inputValidationRules.customMessage || "Debe marcar esta opción." } : {}}
+                    defaultValue={field.defaultValue === 'true' || false} // RHF espera un booleano para 'checked'
                     render={({ field: controllerField }) => (
                         <div className="flex items-center space-x-2 pt-1">
                             <Checkbox
                                 id={fieldName}
-                                checked={!!controllerField.value} // Asegurar que es boolean
-                                onCheckedChange={controllerField.onChange} // onChange espera boolean
+                                checked={!!controllerField.value} // controllerField.value será true/false
+                                onCheckedChange={controllerField.onChange} // onChange espera el nuevo estado booleano
                             />
-                            {/* El Label principal se renderiza fuera de este componente */}
+                            {/* El Label principal del campo se muestra en el componente padre.
+                                Si el checkbox tuviera su propio texto al lado, iría aquí.
+                                Por ejemplo, si el field.label fuera "¿Acepta?", este es solo el input.
+                            */}
+                        </div>
+                    )}
+                />
+            );
+
+        case 'checkbox-group': // NUEVO CASE para Grupo de Checkboxes
+            if (!field.options || field.options.length === 0) {
+                return <p className="text-sm text-orange-600">Checkbox-group sin opciones configuradas.</p>;
+            }
+            return (
+                <Controller
+                    name={fieldName}
+                    control={control}
+                    rules={inputValidationRules.required ? { required: inputValidationRules.customMessage || "Debe marcar esta opción." } : {}} // 'required' aquí podría significar que al menos una opción debe ser seleccionada
+                    defaultValue={[]} // El valor será un array de los 'values' de las opciones seleccionadas
+                    render={({ field: controllerField }) => (
+                        <div className="space-y-2 mt-1">
+                            {field.options?.map((option) => (
+                                <div key={option.value} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`${fieldName}-${option.value}`}
+                                        checked={controllerField.value?.includes(option.value)}
+                                        onCheckedChange={(checked) => {
+                                            const currentValues = controllerField.value || [];
+                                            if (checked) {
+                                                controllerField.onChange([...currentValues, option.value]);
+                                            } else {
+                                                controllerField.onChange(currentValues.filter((val: string) => val !== option.value));
+                                            }
+                                        }}
+                                    />
+                                    <Label htmlFor={`${fieldName}-${option.value}`} className="font-normal">
+                                        {option.label}
+                                    </Label>
+                                </div>
+                            ))}
                         </div>
                     )}
                 />
